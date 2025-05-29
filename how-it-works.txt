@@ -1,0 +1,437 @@
+# Clipboard Saver API - Complete Flow Explanation & Test Examples
+
+## 🔍 HOW THE HYBRID STORAGE WORKS
+
+### When you request: http://localhost:8000/api/clip/a1b2c3d4e5f6
+
+1. **Express Router** receives the request
+2. **Route Handler** extracts token "a1b2c3d4e5f6" from URL
+3. **Hybrid Storage** follows this exact sequence:
+
+```javascript
+// Step 1: Try Memory First (Lightning Fast)
+let clip = this.memoryClips.get("a1b2c3d4e5f6");
+
+// Step 2: If not in memory, try Redis
+if (!clip && this.redisConnected) {
+  clip = await this.getFromRedis("a1b2c3d4e5f6");
+
+  // Step 3: If found in Redis, restore to memory for next time
+  if (clip) {
+    this.memoryClips.set("a1b2c3d4e5f6", clip);
+    console.log("🔄 Clip restored from Redis to memory");
+  }
+}
+
+// Step 4: Check if expired
+if (clip && new Date() > clip.expiresAt) {
+  // Delete from both storages
+  this.memoryClips.delete("a1b2c3d4e5f6");
+  await this.redis.del("a1b2c3d4e5f6");
+  return 404;
+}
+
+// Step 5: Increment access count and return data
+clip.accessCount++;
+return clip.content;
+```
+
+### Data Storage Locations:
+
+**Memory Storage (JavaScript Map):**
+```javascript
+memoryClips = {
+  "a1b2c3d4e5f6": {
+    content: "Hello World",
+    createdAt: "2025-05-29T08:00:00Z",
+    expiresAt: "2025-05-29T09:00:00Z",
+    accessCount: 3
+  }
+}
+```
+
+**Redis Storage (Key-Value with TTL):**
+```
+Key: "a1b2c3d4e5f6"
+Value: '{"content":"Hello World","createdAt":"2025-05-29T08:00:00Z",...}'
+TTL: 3600 seconds (auto-expires)
+```
+
+## 📡 COMPLETE API REQUESTS EXAMPLES
+
+### 1. CREATE CLIP (Basic)
+POST http://localhost:8000/api/clip
+Content-Type: application/json
+
+{
+  "content": "Hello, World! This is my first clip."
+}
+
+EXPECTED RESPONSE:
+{
+  "success": true,
+  "token": "a1b2c3d4e5f6789012345678901234567890abcd",
+  "url": "http://localhost:8000/api/clip/a1b2c3d4e5f6789012345678901234567890abcd",
+  "expiresAt": "2025-05-29T09:00:00.000Z",
+  "expiresIn": "60 minutes",
+  "message": "Clip created successfully"
+}
+
+### 2. CREATE CLIP (All Options)
+POST http://localhost:8000/api/clip
+Content-Type: application/json
+
+{
+  "content": "This is a comprehensive test with all options enabled.",
+  "contentType": "text",
+  "expirationMinutes": 120,
+  "password": "mySecretPassword123",
+  "burnAfterReading": false,
+  "maxAccess": 5
+}
+
+EXPECTED RESPONSE:
+{
+  "success": true,
+  "token": "a1b2c3d4e5f6789012345678901234567890abcd",
+  "url": "http://localhost:8000/api/clip/a1b2c3d4e5f6789012345678901234567890abcd",
+  "expiresAt": "2025-05-29T10:00:00.000Z",
+  "expiresIn": "120 minutes",
+  "message": "Clip created successfully"
+}
+
+### 3. CREATE CLIP (Password Protected)
+POST http://localhost:8000/api/clip
+Content-Type: application/json
+
+{
+  "content": "This is a secret message that requires a password.",
+  "password": "secretPassword",
+  "expirationMinutes": 30
+}
+
+EXPECTED RESPONSE:
+{
+  "success": true,
+  "token": "a1b2c3d4e5f6789012345678901234567890abcd",
+  "url": "http://localhost:8000/api/clip/a1b2c3d4e5f6789012345678901234567890abcd",
+  "expiresAt": "2025-05-29T08:30:00.000Z",
+  "expiresIn": "30 minutes",
+  "message": "Clip created successfully"
+}
+
+### 4. CREATE CLIP (Burn After Reading)
+POST http://localhost:8000/api/clip
+Content-Type: application/json
+
+{
+  "content": "This message will self-destruct after being read once!",
+  "burnAfterReading": true,
+  "expirationMinutes": 60
+}
+
+EXPECTED RESPONSE:
+{
+  "success": true,
+  "token": "a1b2c3d4e5f6789012345678901234567890abcd",
+  "url": "http://localhost:8000/api/clip/a1b2c3d4e5f6789012345678901234567890abcd",
+  "expiresAt": "2025-05-29T09:00:00.000Z",
+  "expiresIn": "60 minutes",
+  "message": "Clip created successfully"
+}
+
+### 5. CREATE CLIP (Code Snippet)
+POST http://localhost:8000/api/clip
+Content-Type: application/json
+
+{
+  "content": "function hello() {\n  console.log('Hello from clipboard!');\n}",
+  "contentType": "code",
+  "expirationMinutes": 240
+}
+
+EXPECTED RESPONSE:
+{
+  "success": true,
+  "token": "a1b2c3d4e5f6789012345678901234567890abcd",
+  "url": "http://localhost:8000/api/clip/a1b2c3d4e5f6789012345678901234567890abcd",
+  "expiresAt": "2025-05-29T12:00:00.000Z",
+  "expiresIn": "240 minutes",
+  "message": "Clip created successfully"
+}
+
+### 6. CREATE CLIP (URL/Link)
+POST http://localhost:8000/api/clip
+Content-Type: application/json
+
+{
+  "content": "https://github.com/your-username/awesome-project",
+  "contentType": "url",
+  "expirationMinutes": 1440
+}
+
+EXPECTED RESPONSE:
+{
+  "success": true,
+  "token": "a1b2c3d4e5f6789012345678901234567890abcd",
+  "url": "http://localhost:8000/api/clip/a1b2c3d4e5f6789012345678901234567890abcd",
+  "expiresAt": "2025-05-30T08:00:00.000Z",
+  "expiresIn": "1440 minutes",
+  "message": "Clip created successfully"
+}
+
+### 7. CREATE CLIP (Short Expiration)
+POST http://localhost:8000/api/clip
+Content-Type: application/json
+
+{
+  "content": "This will expire in 5 minutes",
+  "expirationMinutes": 5
+}
+
+EXPECTED RESPONSE:
+{
+  "success": true,
+  "token": "a1b2c3d4e5f6789012345678901234567890abcd",
+  "url": "http://localhost:8000/api/clip/a1b2c3d4e5f6789012345678901234567890abcd",
+  "expiresAt": "2025-05-29T08:05:00.000Z",
+  "expiresIn": "5 minutes",
+  "message": "Clip created successfully"
+}
+
+### 8. CREATE CLIP (Maximum Expiration - 7 days)
+POST http://localhost:8000/api/clip
+Content-Type: application/json
+
+{
+  "content": "This clip will last for a full week",
+  "expirationMinutes": 10080
+}
+
+EXPECTED RESPONSE:
+{
+  "success": true,
+  "token": "a1b2c3d4e5f6789012345678901234567890abcd",
+  "url": "http://localhost:8000/api/clip/a1b2c3d4e5f6789012345678901234567890abcd",
+  "expiresAt": "2025-06-05T08:00:00.000Z",
+  "expiresIn": "10080 minutes",
+  "message": "Clip created successfully"
+}
+
+### 9. CREATE CLIP (Limited Access)
+POST http://localhost:8000/api/clip
+Content-Type: application/json
+
+{
+  "content": "This can only be accessed 3 times",
+  "maxAccess": 3,
+  "expirationMinutes": 60
+}
+
+EXPECTED RESPONSE:
+{
+  "success": true,
+  "token": "a1b2c3d4e5f6789012345678901234567890abcd",
+  "url": "http://localhost:8000/api/clip/a1b2c3d4e5f6789012345678901234567890abcd",
+  "expiresAt": "2025-05-29T09:00:00.000Z",
+  "expiresIn": "60 minutes",
+  "message": "Clip created successfully"
+}
+
+### 10. RETRIEVE CLIP (Basic)
+GET http://localhost:8000/api/clip/YOUR_TOKEN_HERE
+
+EXPECTED RESPONSE:
+{
+  "success": true,
+  "data": {
+    "content": "Hello, World! This is my first clip.",
+    "contentType": "text",
+    "createdAt": "2025-05-29T08:00:00.000Z",
+    "accessCount": 1,
+    "burnAfterReading": false
+  },
+  "metadata": {
+    "expiresAt": "2025-05-29T09:00:00.000Z",
+    "timeRemaining": 3540000
+  }
+}
+
+### 11. RETRIEVE CLIP (With Password)
+GET http://localhost:8000/api/clip/YOUR_TOKEN_HERE?password=secretPassword
+
+EXPECTED RESPONSE:
+{
+  "success": true,
+  "data": {
+    "content": "This is a secret message that requires a password.",
+    "contentType": "text",
+    "createdAt": "2025-05-29T08:00:00.000Z",
+    "accessCount": 1,
+    "burnAfterReading": false
+  },
+  "metadata": {
+    "expiresAt": "2025-05-29T08:30:00.000Z",
+    "timeRemaining": 1740000
+  }
+}
+
+### 12. GET CLIP INFO (Metadata Only)
+GET http://localhost:8000/api/clip/YOUR_TOKEN_HERE/info
+
+EXPECTED RESPONSE:
+{
+  "success": true,
+  "data": {
+    "contentType": "text",
+    "createdAt": "2025-05-29T08:00:00.000Z",
+    "expiresAt": "2025-05-29T09:00:00.000Z",
+    "accessCount": 0,
+    "burnAfterReading": false,
+    "hasPassword": true,
+    "maxAccess": null,
+    "timeRemaining": 3540000
+  }
+}
+
+### 13. DELETE CLIP
+DELETE http://localhost:8000/api/clip/YOUR_TOKEN_HERE
+
+EXPECTED RESPONSE:
+{
+  "success": true,
+  "message": "Clip deleted successfully"
+}
+
+### 14. GET STATISTICS
+GET http://localhost:8000/api/stats
+
+EXPECTED RESPONSE:
+{
+  "success": true,
+  "data": {
+    "totalClips": 15,
+    "activeClips": 12,
+    "expiredClips": 3,
+    "oldestClip": "2025-05-29T06:30:00.000Z",
+    "totalAccesses": 47,
+    "redisConnected": false,
+    "memoryClips": 15,
+    "redisClips": 0
+  }
+}
+
+### 15. HEALTH CHECK
+GET http://localhost:8000/health
+
+EXPECTED RESPONSE:
+{
+  "status": "healthy",
+  "timestamp": "2025-05-29T08:15:30.123Z",
+  "uptime": 3247.891,
+  "environment": "development",
+  "version": "1.0.0"
+}
+
+## 🚨 ERROR RESPONSES
+
+### Validation Error:
+{
+  "error": "Validation failed",
+  "details": [
+    {
+      "type": "field",
+      "msg": "Content is required",
+      "path": "content",
+      "location": "body"
+    }
+  ]
+}
+
+### Rate Limited:
+{
+  "error": "Too many requests from this IP, please try again later.",
+  "retryAfter": "15 minutes"
+}
+
+### Invalid Token Format:
+{
+  "error": "Invalid token format",
+  "details": [
+    {
+      "type": "field",
+      "msg": "Invalid token format",
+      "path": "token",
+      "location": "params"
+    }
+  ]
+}
+
+### Clip Not Found/Expired:
+{
+  "error": "Clip not found",
+  "message": "The clip may have expired, been deleted, or the token is invalid."
+}
+
+## 🔄 CURL COMMANDS FOR TESTING
+
+# Create a basic clip
+curl -X POST http://localhost:8000/api/clip \
+  -H "Content-Type: application/json" \
+  -d '{"content": "Test message", "expirationMinutes": 30}'
+
+# Create password-protected clip
+curl -X POST http://localhost:8000/api/clip \
+  -H "Content-Type: application/json" \
+  -d '{"content": "Secret", "password": "test123"}'
+
+# Retrieve clip (replace TOKEN with actual token)
+curl http://localhost:8000/api/clip/TOKEN
+
+# Retrieve password-protected clip
+curl "http://localhost:8000/api/clip/TOKEN?password=test123"
+
+# Get statistics
+curl http://localhost:8000/api/stats
+
+# Health check
+curl http://localhost:8000/health
+
+# Delete clip
+curl -X DELETE http://localhost:8000/api/clip/TOKEN
+
+## 💾 STORAGE BEHAVIOR
+
+### Memory-Only Mode (No Redis):
+- ✅ Lightning fast access
+- ❌ Data lost on server restart
+- ✅ Perfect for development/testing
+
+### Hybrid Mode (With Redis):
+- ✅ Lightning fast access (memory first)
+- ✅ Data persists through restarts
+- ✅ Automatic failover if Redis fails
+- ✅ Production ready
+
+### Data Flow Example:
+1. Create clip → Stored in memory + Redis
+2. Server restart → Memory cleared, Redis intact
+3. First access → Redis → Memory (restored)
+4. Subsequent access → Memory (instant)
+
+## 🎯 REALISTIC USE CASES
+
+### 1. Quick Note Sharing
+POST: {"content": "Meeting room changed to 301", "expirationMinutes": 60}
+
+### 2. Temporary Password
+POST: {"content": "TempPass123", "password": "secure", "burnAfterReading": true}
+
+### 3. Code Snippet Sharing
+POST: {"content": "const api = 'http://localhost:8000';", "contentType": "code"}
+
+### 4. One-time Link
+POST: {"content": "https://meet.google.com/abc-defg-hij", "maxAccess": 1}
+
+### 5. Cross-device Clipboard
+POST: {"content": "Text copied from phone", "expirationMinutes": 10}
