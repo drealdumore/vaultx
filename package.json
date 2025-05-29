@@ -9,6 +9,8 @@
     "build": "tsc",
     "start": "node dist/server.js",
     "lint": "biome check .",
+    "test-redis": "bash test-redis.sh",
+    "test-api": "bash test-api.sh",
     "lint:fix": "biome check . --write"
   },
   "keywords": [
