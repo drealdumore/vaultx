@@ -19,7 +19,7 @@
     "express",
     "nodejs"
   ],
-  "author": "",
+  "author": "samuel isah",
   "license": "MIT",
   "dependencies": {
     "@types/express": "^4.17.21",

@@ -21,6 +21,7 @@ const clipStorage = new HybridClipStorage();
 
 // Security middleware
 app.use(
+  
   helmet({
     contentSecurityPolicy: {
       directives: {
